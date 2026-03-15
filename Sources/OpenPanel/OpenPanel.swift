@@ -386,16 +386,22 @@ public struct AnyCodable: Codable {
 
 public class OpenPanel {
     public static let shared = OpenPanel()
-    
+
     private let api: Api
-    private var profileId: String?
+    private let stateQueue = DispatchQueue(label: "com.openpanel.stateQueue")
+    private var _profileId: String?
+    private var profileId: String? {
+        get { stateQueue.sync { _profileId } }
+        set { stateQueue.sync { _profileId = newValue } }
+    }
     private let globalQueue = DispatchQueue(label: "com.openpanel.globalQueue", attributes: .concurrent)
     private var _global: [String: Any]?
     private var global: [String: Any]? {
         get { globalQueue.sync { _global } }
         set { globalQueue.async(flags: .barrier) { self._global = newValue } }
     }
-    private var queue: [TrackHandlerPayload] = []
+    private var _queue: [TrackHandlerPayload] = []
+    private var _options: Options?
     private let operationQueue: OperationQueue
     
     public struct Options {
@@ -417,9 +423,12 @@ public class OpenPanel {
             self.automaticTracking = automaticTracking
         }
     }
-    
-    private var options: Options?
-    
+
+    private var options: Options? {
+        get { stateQueue.sync { _options } }
+        set { stateQueue.sync { _options = newValue } }
+    }
+
     public static var sdkVersion: String {
         return "0.1.0"
     }
@@ -493,7 +502,7 @@ public class OpenPanel {
         }
         
         if options.waitForProfile == true, profileId == nil {
-            queue.append(payload)
+            stateQueue.sync { _queue.append(payload) }
             return
         }
         
@@ -596,8 +605,11 @@ public class OpenPanel {
     }
     
     public func flush() {
-        let currentQueue = queue
-        queue.removeAll()
+        let currentQueue = stateQueue.sync { () -> [TrackHandlerPayload] in
+            let items = _queue
+            _queue.removeAll()
+            return items
+        }
         for item in currentQueue {
             send(item)
         }
