@@ -455,7 +455,7 @@ public class OpenPanel {
                 if let global = shared._global {
                     var mergedProperties = global
                     if let payloadProperties = payload.properties {
-                        mergedProperties.merge(payloadProperties) { (_, new) in (new as AnyObject).value }
+                        mergedProperties.merge(payloadProperties) { (_, new) in new }
                     }
                     updatedPayload.properties = mergedProperties.mapValues { AnyCodable($0) }
                 }
