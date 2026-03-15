@@ -18,6 +18,131 @@ internal class DeviceInfo {
         #endif
     }
 
+    // MARK: - Device Properties
+
+    static var isSimulator: Bool {
+        #if targetEnvironment(simulator)
+        return true
+        #else
+        return false
+        #endif
+    }
+
+    static var isTestFlight: Bool {
+        Bundle.main.appStoreReceiptURL?.lastPathComponent == "sandboxReceipt"
+    }
+
+    static var isAppStore: Bool {
+        #if os(iOS)
+        if isSimulator { return false }
+        if isTestFlight { return false }
+        if isDebug { return false }
+        return true
+        #else
+        return false
+        #endif
+    }
+
+    static var isDebug: Bool {
+        #if DEBUG
+        return true
+        #else
+        return false
+        #endif
+    }
+
+    static var systemVersion: String {
+        let version = ProcessInfo.processInfo.operatingSystemVersion
+        return "\(version.majorVersion).\(version.minorVersion).\(version.patchVersion)"
+    }
+
+    static var appVersion: String {
+        Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "unknown"
+    }
+
+    static var buildNumber: String {
+        Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? "unknown"
+    }
+
+    static var appName: String {
+        Bundle.main.infoDictionary?["CFBundleDisplayName"] as? String
+            ?? Bundle.main.infoDictionary?["CFBundleName"] as? String
+            ?? "unknown"
+    }
+
+    static var deviceType: String {
+        #if os(iOS) || os(tvOS)
+        switch UIDevice.current.userInterfaceIdiom {
+        case .pad: return "iPad"
+        case .phone: return "iPhone"
+        case .tv: return "Apple TV"
+        case .carPlay: return "CarPlay"
+        case .vision: return "Apple Vision"
+        case .mac: return "Mac"
+        case .unspecified: return "Unknown"
+        @unknown default: return "Unknown"
+        }
+        #elseif os(macOS)
+        return "Mac"
+        #elseif os(watchOS)
+        return "Apple Watch"
+        #else
+        return "Unknown"
+        #endif
+    }
+
+    static var modelName: String {
+        #if os(iOS) || os(tvOS) || os(watchOS)
+        var systemInfo = utsname()
+        uname(&systemInfo)
+        return withUnsafePointer(to: &systemInfo.machine) {
+            $0.withMemoryRebound(to: CChar.self, capacity: 1) {
+                String(validatingUTF8: $0) ?? "Unknown"
+            }
+        }
+        #elseif os(macOS)
+        var size = 0
+        sysctlbyname("hw.model", nil, &size, nil, 0)
+        var model = [CChar](repeating: 0, count: size)
+        sysctlbyname("hw.model", &model, &size, nil, 0)
+        return String(cString: model)
+        #else
+        return "Unknown"
+        #endif
+    }
+
+    static var operatingSystem: String {
+        #if os(iOS)
+        return "iOS"
+        #elseif os(macOS)
+        return "macOS"
+        #elseif os(tvOS)
+        return "tvOS"
+        #elseif os(watchOS)
+        return "watchOS"
+        #elseif os(visionOS)
+        return "visionOS"
+        #else
+        return "Unknown"
+        #endif
+    }
+
+    static var locale: String {
+        Locale.current.identifier
+    }
+
+    static var preferredLanguage: String {
+        Locale.preferredLanguages.first ?? "unknown"
+    }
+
+    static var appLanguage: String {
+        Bundle.main.preferredLocalizations.first ?? "unknown"
+    }
+
+    static var timeZone: String {
+        TimeZone.current.identifier
+    }
+
     // MARK: - User Agent
 
     private static func getiOSUserAgent() -> String {
