@@ -165,8 +165,7 @@ internal class DeviceInfo {
     }
 
     private static func getGenericUserAgent() -> String {
-        let osName = ProcessInfo.processInfo.operatingSystemVersionString
-        return "OpenPanel/\(OpenPanel.sdkVersion) (\(osName))"
+        return "OpenPanel/\(OpenPanel.sdkVersion) (\(operatingSystem) \(systemVersion))"
     }
 }
 
@@ -481,7 +480,7 @@ public class OpenPanel {
     
     private func send(_ payload: TrackHandlerPayload) {
         guard let options = self.options else {
-            logError("OpenPanel not initialized. Call OpenPanel.initialize() first.")
+            Self.logError("OpenPanel not initialized. Call OpenPanel.initialize() first.")
             return
         }
         
@@ -506,7 +505,7 @@ public class OpenPanel {
                 case .success:
                     break
                 case .failure(let error):
-                    self.logError("Error sending payload: \(error)")
+                    Self.logError("Error sending payload: \(error)")
                 }
             }
         }
@@ -665,8 +664,21 @@ public class OpenPanel {
     }
     #endif
 
-    private func logError(_ message: String) {
-        print("OpenPanel Error: \(message)")
+    // MARK: - Logging
+
+    static func log(_ message: String, file: String = #file, line: UInt = #line, function: String = #function) {
+        let filename = (file as NSString).lastPathComponent
+        print("[\(filename):\(line) \(function)] \(Date()): \(message)")
+    }
+
+    static func logWarning(_ message: String, file: String = #file, line: UInt = #line, function: String = #function) {
+        let filename = (file as NSString).lastPathComponent
+        print("[OpenPanel Warning] [\(filename):\(line) \(function)] \(Date()): \(message)")
+    }
+
+    static func logError(_ message: String, file: String = #file, line: UInt = #line, function: String = #function) {
+        let filename = (file as NSString).lastPathComponent
+        print("[OpenPanel Error] [\(filename):\(line) \(function)] \(Date()): \(message)")
     }
 }
 
@@ -732,6 +744,7 @@ internal class Api {
             let (data, response) = try await URLSession.shared.data(for: request)
             
             guard let httpResponse = response as? HTTPURLResponse else {
+                OpenPanel.logWarning("Invalid response: \(response)")
                 return .failure(NSError(domain: "HTTPError", code: 0, userInfo: [NSLocalizedDescriptionKey: "Invalid response"]))
             }
             
