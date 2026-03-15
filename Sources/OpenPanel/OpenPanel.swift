@@ -330,7 +330,11 @@ public struct AnyCodable: Codable {
     public let value: Any
     
     public init(_ value: Any) {
-        self.value = value
+        if let anyCodable = value as? AnyCodable {
+            self.value = anyCodable.value
+        } else {
+            self.value = value
+        }
     }
     
     public init(from decoder: Decoder) throws {
@@ -362,6 +366,8 @@ public struct AnyCodable: Codable {
         case let value as Double:
             try container.encode(value)
         case let value as Bool:
+            try container.encode(value)
+        case let value as Date:
             try container.encode(value)
         case let value as [AnyCodable]:
             try container.encode(value)
@@ -671,7 +677,13 @@ internal class Api {
     private var headers: [String: String]
     private var maxRetries: Int
     private var initialRetryDelay: TimeInterval
-    
+
+    private static let encoder: JSONEncoder = {
+        let encoder = JSONEncoder()
+        encoder.dateEncodingStrategy = .iso8601
+        return encoder
+    }()
+
     struct Config {
         let baseUrl: String
         var defaultHeaders: [String: String]?
@@ -705,7 +717,7 @@ internal class Api {
         request.allHTTPHeaderFields = headers
         
         do {
-            request.httpBody = try JSONEncoder().encode(data)
+            request.httpBody = try Self.encoder.encode(data)
         } catch {
             return .failure(error)
         }
