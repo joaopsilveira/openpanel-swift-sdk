@@ -1,10 +1,8 @@
 import Foundation
 #if os(iOS)
 import UIKit
-import WebKit
 #elseif os(macOS)
 import AppKit
-import WebKit
 #endif
 
 // MARK: - DeviceInfo
@@ -19,70 +17,155 @@ internal class DeviceInfo {
         return getGenericUserAgent()
         #endif
     }
-    
-    private static func isRunningInExtension() -> Bool {
-        return Bundle.main.bundlePath.hasSuffix(".appex")
-    }
-    
-    private static func getiOSUserAgent() -> String {
-        if !isRunningInExtension() {
-            let webView = WKWebView(frame: .zero)
-            var userAgent = ""
-            
-            let semaphore = DispatchSemaphore(value: 0)
-            
-            DispatchQueue.main.async {
-                webView.evaluateJavaScript("navigator.userAgent") { (result, error) in
-                    if let agent = result as? String {
-                        userAgent = agent
-                    }
-                    semaphore.signal()
-                }
-            }
-            
-            _ = semaphore.wait(timeout: .now() + 1.0)
 
-            userAgent += " OpenPanel/\(OpenPanel.sdkVersion)"
-            
-            if userAgent.isEmpty {
-                userAgent = getBasicUserAgent()
-            }
-            
-            return userAgent
-        } else {
-            return getBasicUserAgent()
+    // MARK: - Device Properties
+
+    static var isSimulator: Bool {
+        #if targetEnvironment(simulator)
+        return true
+        #else
+        return false
+        #endif
+    }
+
+    static var isTestFlight: Bool {
+        Bundle.main.appStoreReceiptURL?.lastPathComponent == "sandboxReceipt"
+    }
+
+    static var isAppStore: Bool {
+        #if os(iOS)
+        if isSimulator { return false }
+        if isTestFlight { return false }
+        if isDebug { return false }
+        return true
+        #else
+        return false
+        #endif
+    }
+
+    static var isDebug: Bool {
+        #if DEBUG
+        return true
+        #else
+        return false
+        #endif
+    }
+
+    static var systemVersion: String {
+        let version = ProcessInfo.processInfo.operatingSystemVersion
+        return "\(version.majorVersion).\(version.minorVersion).\(version.patchVersion)"
+    }
+
+    static var appVersion: String {
+        Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "unknown"
+    }
+
+    static var buildNumber: String {
+        Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? "unknown"
+    }
+
+    static var appName: String {
+        Bundle.main.infoDictionary?["CFBundleDisplayName"] as? String
+            ?? Bundle.main.infoDictionary?["CFBundleName"] as? String
+            ?? "unknown"
+    }
+
+    static var deviceType: String {
+        #if os(iOS) || os(tvOS)
+        switch UIDevice.current.userInterfaceIdiom {
+        case .pad: return "iPad"
+        case .phone: return "iPhone"
+        case .tv: return "Apple TV"
+        case .carPlay: return "CarPlay"
+        case .vision: return "Apple Vision"
+        case .mac: return "Mac"
+        case .unspecified: return "Unknown"
+        @unknown default: return "Unknown"
         }
+        #elseif os(macOS)
+        return "Mac"
+        #elseif os(watchOS)
+        return "Apple Watch"
+        #else
+        return "Unknown"
+        #endif
     }
 
-    private static func getBasicUserAgent() -> String {
+    static var modelName: String {
+        #if os(iOS) || os(tvOS) || os(watchOS)
+        var systemInfo = utsname()
+        uname(&systemInfo)
+        return withUnsafePointer(to: &systemInfo.machine) {
+            $0.withMemoryRebound(to: CChar.self, capacity: 1) {
+                String(validatingUTF8: $0) ?? "Unknown"
+            }
+        }
+        #elseif os(macOS)
+        var size = 0
+        sysctlbyname("hw.model", nil, &size, nil, 0)
+        var model = [CChar](repeating: 0, count: size)
+        sysctlbyname("hw.model", &model, &size, nil, 0)
+        return String(cString: model)
+        #else
+        return "Unknown"
+        #endif
+    }
+
+    static var operatingSystem: String {
+        #if os(iOS)
+        return "iOS"
+        #elseif os(macOS)
+        return "macOS"
+        #elseif os(tvOS)
+        return "tvOS"
+        #elseif os(watchOS)
+        return "watchOS"
+        #elseif os(visionOS)
+        return "visionOS"
+        #else
+        return "Unknown"
+        #endif
+    }
+
+    static var locale: String {
+        Locale.current.identifier
+    }
+
+    static var preferredLanguage: String {
+        Locale.preferredLanguages.first ?? "unknown"
+    }
+
+    static var appLanguage: String {
+        Bundle.main.preferredLocalizations.first ?? "unknown"
+    }
+
+    static var timeZone: String {
+        TimeZone.current.identifier
+    }
+
+    // MARK: - User Agent
+
+    private static func getiOSUserAgent() -> String {
+        #if os(iOS)
         let device = UIDevice.current
         let systemVersion = device.systemVersion
         let model = device.model
-        let systemName = device.systemName
 
-        // Construct a user agent string manually with more detailed information
-        var userAgent = "Mozilla/5.0 (\(model); \(systemName) \(systemVersion.replacingOccurrences(of: ".", with: "_")); like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Mobile/\(systemVersion)"
-
-        // Append your custom string if necessary
-        userAgent += " OpenPanel/\(OpenPanel.sdkVersion)"
-
-        return userAgent
+        return "Mozilla/5.0 (\(model); CPU \(device.systemName) \(systemVersion.replacingOccurrences(of: ".", with: "_")) like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Mobile/\(systemVersion) OpenPanel/\(OpenPanel.sdkVersion)"
+        #else
+        return getGenericUserAgent()
+        #endif
     }
 
     private static func getMacOSUserAgent() -> String {
-        let processInfo = ProcessInfo.processInfo
-        let osVersion = processInfo.operatingSystemVersionString
-        let versionParts = osVersion.components(separatedBy: " ")
-        let version = versionParts.count > 1 ? versionParts[1] : "Unknown"
-        
-        let userAgent = "Mozilla/5.0 (Macintosh; Intel Mac OS X \(version.replacingOccurrences(of: ".", with: "_"))) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/15.0 Safari/605.1.15"
-        
-        return userAgent + " OpenPanel/\(OpenPanel.sdkVersion)"
+        let version = ProcessInfo.processInfo.operatingSystemVersion
+        let versionString = "\(version.majorVersion)_\(version.minorVersion)_\(version.patchVersion)"
+
+        return "Mozilla/5.0 (Macintosh; Intel Mac OS X \(versionString)) AppleWebKit/605.1.15 (KHTML, like Gecko) OpenPanel/\(OpenPanel.sdkVersion)"
     }
-    
+
     private static func getGenericUserAgent() -> String {
-        let osName = ProcessInfo.processInfo.operatingSystemVersionString
-        return "OpenPanel/\(OpenPanel.sdkVersion) (\(osName))"
+        return "OpenPanel/\(OpenPanel.sdkVersion) (\(operatingSystem) \(systemVersion))"
     }
 }
 
@@ -246,7 +329,11 @@ public struct AnyCodable: Codable {
     public let value: Any
     
     public init(_ value: Any) {
-        self.value = value
+        if let anyCodable = value as? AnyCodable {
+            self.value = anyCodable.value
+        } else {
+            self.value = value
+        }
     }
     
     public init(from decoder: Decoder) throws {
@@ -279,6 +366,8 @@ public struct AnyCodable: Codable {
             try container.encode(value)
         case let value as Bool:
             try container.encode(value)
+        case let value as Date:
+            try container.encode(value)
         case let value as [AnyCodable]:
             try container.encode(value)
         case let value as [String: AnyCodable]:
@@ -297,16 +386,22 @@ public struct AnyCodable: Codable {
 
 public class OpenPanel {
     public static let shared = OpenPanel()
-    
+
     private let api: Api
-    private var profileId: String?
+    private let stateQueue = DispatchQueue(label: "com.openpanel.stateQueue")
+    private var _profileId: String?
+    private var profileId: String? {
+        get { stateQueue.sync { _profileId } }
+        set { stateQueue.sync { _profileId = newValue } }
+    }
     private let globalQueue = DispatchQueue(label: "com.openpanel.globalQueue", attributes: .concurrent)
     private var _global: [String: Any]?
     private var global: [String: Any]? {
         get { globalQueue.sync { _global } }
         set { globalQueue.async(flags: .barrier) { self._global = newValue } }
     }
-    private var queue: [TrackHandlerPayload] = []
+    private var _queue: [TrackHandlerPayload] = []
+    private var _options: Options?
     private let operationQueue: OperationQueue
     
     public struct Options {
@@ -328,13 +423,35 @@ public class OpenPanel {
             self.automaticTracking = automaticTracking
         }
     }
-    
-    private var options: Options?
-    
-    public static var sdkVersion: String {
-        return "0.0.1"
+
+    private var options: Options? {
+        get { stateQueue.sync { _options } }
+        set { stateQueue.sync { _options = newValue } }
     }
-    
+
+    public static var sdkVersion: String {
+        return "0.1.0"
+    }
+
+    /// Device and app metadata automatically attached to every track call.
+    private static var basicPayload: [String: Any] {
+        [
+            "__os": DeviceInfo.operatingSystem,
+            "__osVersion": DeviceInfo.systemVersion,
+            "__device": DeviceInfo.deviceType,
+            "__model": DeviceInfo.modelName,
+            "__brand": "Apple",
+            "__browser": DeviceInfo.appName,
+            "__version": DeviceInfo.appVersion,
+            "__browserVersion": DeviceInfo.appVersion,
+            "__buildNumber": DeviceInfo.buildNumber,
+            "__language": DeviceInfo.appLanguage,
+            "__system_language": DeviceInfo.preferredLanguage,
+            "__locale": DeviceInfo.locale,
+            "__timezone": DeviceInfo.timeZone,
+        ]
+    }
+
     private init() {
         self.api = Api(config: Api.Config(baseUrl: "https://api.openpanel.dev"))
         self.operationQueue = OperationQueue()
@@ -372,7 +489,7 @@ public class OpenPanel {
     
     private func send(_ payload: TrackHandlerPayload) {
         guard let options = self.options else {
-            logError("OpenPanel not initialized. Call OpenPanel.initialize() first.")
+            Self.logError("OpenPanel not initialized. Call OpenPanel.initialize() first.")
             return
         }
         
@@ -385,7 +502,7 @@ public class OpenPanel {
         }
         
         if options.waitForProfile == true, profileId == nil {
-            queue.append(payload)
+            stateQueue.sync { _queue.append(payload) }
             return
         }
         
@@ -397,7 +514,7 @@ public class OpenPanel {
                 case .success:
                     break
                 case .failure(let error):
-                    self.logError("Error sending payload: \(error)")
+                    Self.logError("Error sending payload: \(error)")
                 }
             }
         }
@@ -431,7 +548,11 @@ public class OpenPanel {
     
     public static func track(name: String, properties: TrackProperties? = nil) {
         let mergedProperties = shared.globalQueue.sync {
-            var merged = shared._global ?? [:]
+            // basicPayload < global < per-call (per-call wins)
+            var merged = basicPayload
+            if let global = shared._global {
+                merged.merge(global) { (_, new) in new }
+            }
             if let properties = properties {
                 merged.merge(properties) { (_, new) in new }
             }
@@ -455,7 +576,7 @@ public class OpenPanel {
                 if let global = shared._global {
                     var mergedProperties = global
                     if let payloadProperties = payload.properties {
-                        mergedProperties.merge(payloadProperties) { (_, new) in (new as AnyObject).value }
+                        mergedProperties.merge(payloadProperties) { (_, new) in new }
                     }
                     updatedPayload.properties = mergedProperties.mapValues { AnyCodable($0) }
                 }
@@ -484,8 +605,11 @@ public class OpenPanel {
     }
     
     public func flush() {
-        let currentQueue = queue
-        queue.removeAll()
+        let currentQueue = stateQueue.sync { () -> [TrackHandlerPayload] in
+            let items = _queue
+            _queue.removeAll()
+            return items
+        }
         for item in currentQueue {
             send(item)
         }
@@ -552,8 +676,21 @@ public class OpenPanel {
     }
     #endif
 
-    private func logError(_ message: String) {
-        print("OpenPanel Error: \(message)")
+    // MARK: - Logging
+
+    static func log(_ message: String, file: String = #file, line: UInt = #line, function: String = #function) {
+        let filename = (file as NSString).lastPathComponent
+        print("[\(filename):\(line) \(function)] \(Date()): \(message)")
+    }
+
+    static func logWarning(_ message: String, file: String = #file, line: UInt = #line, function: String = #function) {
+        let filename = (file as NSString).lastPathComponent
+        print("[OpenPanel Warning] [\(filename):\(line) \(function)] \(Date()): \(message)")
+    }
+
+    static func logError(_ message: String, file: String = #file, line: UInt = #line, function: String = #function) {
+        let filename = (file as NSString).lastPathComponent
+        print("[OpenPanel Error] [\(filename):\(line) \(function)] \(Date()): \(message)")
     }
 }
 
@@ -564,7 +701,13 @@ internal class Api {
     private var headers: [String: String]
     private var maxRetries: Int
     private var initialRetryDelay: TimeInterval
-    
+
+    private static let encoder: JSONEncoder = {
+        let encoder = JSONEncoder()
+        encoder.dateEncodingStrategy = .iso8601
+        return encoder
+    }()
+
     struct Config {
         let baseUrl: String
         var defaultHeaders: [String: String]?
@@ -598,7 +741,7 @@ internal class Api {
         request.allHTTPHeaderFields = headers
         
         do {
-            request.httpBody = try JSONEncoder().encode(data)
+            request.httpBody = try Self.encoder.encode(data)
         } catch {
             return .failure(error)
         }
@@ -613,6 +756,7 @@ internal class Api {
             let (data, response) = try await URLSession.shared.data(for: request)
             
             guard let httpResponse = response as? HTTPURLResponse else {
+                OpenPanel.logWarning("Invalid response: \(response)")
                 return .failure(NSError(domain: "HTTPError", code: 0, userInfo: [NSLocalizedDescriptionKey: "Invalid response"]))
             }
             
