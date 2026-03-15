@@ -416,9 +416,28 @@ public class OpenPanel {
     private var options: Options?
     
     public static var sdkVersion: String {
-        return "0.0.1"
+        return "0.1.0"
     }
-    
+
+    /// Device and app metadata automatically attached to every track call.
+    private static var basicPayload: [String: Any] {
+        [
+            "__os": DeviceInfo.operatingSystem,
+            "__osVersion": DeviceInfo.systemVersion,
+            "__device": DeviceInfo.deviceType,
+            "__model": DeviceInfo.modelName,
+            "__brand": "Apple",
+            "__browser": DeviceInfo.appName,
+            "__version": DeviceInfo.appVersion,
+            "__browserVersion": DeviceInfo.appVersion,
+            "__buildNumber": DeviceInfo.buildNumber,
+            "__language": DeviceInfo.appLanguage,
+            "__system_language": DeviceInfo.preferredLanguage,
+            "__locale": DeviceInfo.locale,
+            "__timezone": DeviceInfo.timeZone,
+        ]
+    }
+
     private init() {
         self.api = Api(config: Api.Config(baseUrl: "https://api.openpanel.dev"))
         self.operationQueue = OperationQueue()
@@ -515,7 +534,11 @@ public class OpenPanel {
     
     public static func track(name: String, properties: TrackProperties? = nil) {
         let mergedProperties = shared.globalQueue.sync {
-            var merged = shared._global ?? [:]
+            // basicPayload < global < per-call (per-call wins)
+            var merged = basicPayload
+            if let global = shared._global {
+                merged.merge(global) { (_, new) in new }
+            }
             if let properties = properties {
                 merged.merge(properties) { (_, new) in new }
             }
