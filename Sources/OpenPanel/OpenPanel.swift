@@ -433,6 +433,13 @@ public class OpenPanel {
         return "0.1.0"
     }
 
+    /// ISO 8601 formatter with millisecond precision for event timestamps.
+    private static let iso8601WithMilliseconds: ISO8601DateFormatter = {
+        let formatter = ISO8601DateFormatter()
+        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        return formatter
+    }()
+
     /// Device and app metadata automatically attached to every track call.
     private static var basicPayload: [String: Any] {
         [
@@ -449,6 +456,7 @@ public class OpenPanel {
             "__system_language": DeviceInfo.preferredLanguage,
             "__locale": DeviceInfo.locale,
             "__timezone": DeviceInfo.timeZone,
+            "__timestamp": iso8601WithMilliseconds.string(from: Date()),
         ]
     }
 
